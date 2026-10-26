@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DealForge AI — Enterprise Multi-Agent Procurement Automation</title>
+    <meta name="description" content="DealForge AI: An integrated multi-agent procurement platform powered by CrewAI, Google ADK, MCP tools, and MySQL.">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+        <div class="brand-section">
+            <div class="brand-logo">⚡</div>
+            <div>
+                <div class="brand-title">DealForge AI</div>
+                <div class="brand-tag">Multi-Agent Engine</div>
+            </div>
+        </div>
+
+        <nav class="nav-menu">
+            <a class="nav-item active" data-view="overview" id="nav-overview">
+                <span class="icon">📊</span>
+                <span>Dashboard Overview</span>
+            </a>
+            <a class="nav-item" data-view="new-request" id="nav-new-request">
+                <span class="icon">📝</span>
+                <span>New Purchase Request</span>
+            </a>
+            <a class="nav-item" data-view="workflow" id="nav-workflow">
+                <span class="icon">🤖</span>
+                <span>Live Agent Workflow</span>
+            </a>
+            <a class="nav-item" data-view="vendors" id="nav-vendors">
+                <span class="icon">🏢</span>
+                <span>Vendor Comparison</span>
+            </a>
+            <a class="nav-item" data-view="negotiations" id="nav-negotiations">
+                <span class="icon">💬</span>
+                <span>Negotiation Centre</span>
+            </a>
+            <a class="nav-item" data-view="approvals" id="nav-approvals">
+                <span class="icon">🛡️</span>
+                <span>Approval Centre</span>
+                <span class="nav-badge" id="nav-pending-badge" style="display: none;">0</span>
+            </a>
+            <a class="nav-item" data-view="orders" id="nav-orders">
+                <span class="icon">📄</span>
+                <span>Purchase Orders</span>
+            </a>
+            <a class="nav-item" data-view="audit" id="nav-audit">
+                <span class="icon">📜</span>
+                <span>Audit Trail</span>
+            </a>
+        </nav>
+
+        <div class="sidebar-footer">
+            <div class="system-status">
+                <span class="status-dot"></span>
+                <span>MySQL & ADK Online</span>
+            </div>
+            <div>Stack: CrewAI + ADK + MCP + A2A</div>
+        </div>
+    </aside>
+
+    <!-- Main Wrapper -->
+    <main class="main-wrapper">
+        <header class="topbar">
+            <h1 class="page-title" id="topbar-title">Overview Dashboard</h1>
+            <div class="topbar-actions">
+                <div class="badge-demo">
+                    <span>⚡ Demo Mode: Active (Deterministic High-Fidelity)</span>
+                </div>
+                <button class="btn-primary" onclick="switchView('new-request')">
+                    <span>+ New Request</span>
+                </button>
+            </div>
+        </header>
+
+        <div class="content-body">
+            <!-- 1. VIEW: OVERVIEW DASHBOARD -->
+            <section class="view-section active" id="view-overview">
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <div class="metric-header">
+                            <span class="metric-label">Total Requests</span>
+                            <div class="metric-icon">📋</div>
+                        </div>
+                        <div class="metric-value" id="stat-total-requests">0</div>
+                        <div class="metric-subtext">Cumulative submitted</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-header">
+                            <span class="metric-label">Active Workflows</span>
+                            <div class="metric-icon">🔄</div>
+                        </div>
+                        <div class="metric-value" id="stat-active-workflows" style="color: var(--accent-cyan);">0</div>
+                        <div class="metric-subtext">Currently executing</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-header">
+                            <span class="metric-label">Pending Approvals</span>
+                            <div class="metric-icon">⏳</div>
+                        </div>
+                        <div class="metric-value" id="stat-pending-approvals" style="color: var(--accent-amber);">0</div>
+                        <div class="metric-subtext">Awaiting human sign-off</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-header">
+                            <span class="metric-label">Issued POs</span>
+                            <div class="metric-icon">📄</div>
+                        </div>
+                        <div class="metric-value" id="stat-issued-pos" style="color: var(--accent-emerald);">0</div>
+                        <div class="metric-subtext">Committed to MySQL</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-header">
+                            <span class="metric-label">Approved Spend</span>
+                            <div class="metric-icon">💰</div>
+                        </div>
+                        <div class="metric-value" id="stat-approved-spend">₹0.00</div>
+                        <div class="metric-subtext">Authorized commitments</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-header">
+                            <span class="metric-label">Negotiated Savings</span>
+                            <div class="metric-icon">📈</div>
+                        </div>
+                        <div class="metric-value" id="stat-estimated-savings" style="color: var(--accent-emerald);">₹0.00</div>
+                        <div class="metric-subtext">AI Counter-offer delta</div>
+                    </div>
+                </div>
+
+                <div class="glass-panel">
+                    <div class="panel-header">
+                        <div class="panel-title">
+                            <span>🕒 Recent Procurement Requests</span>
+                        </div>
+                        <button class="btn-secondary" onclick="loadDashboardSummary()">↻ Refresh</button>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Request ID</th>
+                                    <th>Requirements</th>
+                                    <th>Requester</th>
+                                    <th>Budget Ceiling</th>
+                                    <th>Status</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="recent-requests-table-body">
+                                <tr>
+                                    <td colspan="6" style="text-align: center; color: var(--text-muted);">Loading requests from database...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 2. VIEW: NEW PURCHASE REQUEST -->
+            <section class="view-section" id="view-new-request">
+                <div class="glass-panel">
+                    <div class="panel-header">
+                        <div class="panel-title">
+                            <span>📝 Submit Natural-Language Procurement Request</span>
+                        </div>
+                    </div>
+                    <form onsubmit="submitPurchaseRequest(event)">
+                        <div class="form-group">
+                            <label class="form-label">Natural Language Request Statement</label>
+                            <textarea class="form-textarea" id="nl-request-input" placeholder="e.g. Purchase 50 laptops with at least 16 GB RAM and 512 GB SSD, a maximum budget of ₹35,00,000, delivery within 14 days, and a minimum two-year warranty." required></textarea>
+                            
+                            <div class="quick-prompts">
+                                <span style="font-size: 11px; color: var(--text-muted); align-self: center;">Quick Fill Scenarios:</span>
+                                <span class="prompt-chip" onclick="fillPrompt('standard-laptop')">💻 Standard 50 Laptops (Within Budget)</span>
+                                <span class="prompt-chip" onclick="fillPrompt('budget-overrun')">⚠️ 60 Laptops (Budget Overrun Trigger)</span>
+                                <span class="prompt-chip" onclick="fillPrompt('server-cluster')">🖥️ 4 PowerEdge Rackmount Servers</span>
+                            </div>
+                        </div>
+
+                        <div style="font-weight: 600; font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;">Optional Structured Overrides (Auto-extracted if left blank)</div>
+                        <div class="form-grid-3">
+                            <div class="form-group">
+                                <label class="form-label">Quantity</label>
+                                <input type="number" class="form-input" id="override-qty" placeholder="e.g. 50">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Budget Limit (INR)</label>
+                                <input type="number" class="form-input" id="override-budget" placeholder="e.g. 3500000">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Delivery Deadline (Days)</label>
+                                <input type="number" class="form-input" id="override-deadline" placeholder="e.g. 14">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Warranty SLA (Months)</label>
+                                <input type="number" class="form-input" id="override-warranty" placeholder="e.g. 24">
+                            </div>
+                        </div>
+
+                        <div style="display: flex; gap: 12px; margin-top: 10px;">
+                            <button type="submit" class="btn-primary" id="btn-submit-request">
+                                🚀 Launch Multi-Agent Workflow
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </section>
+
+            <!-- 3. VIEW: LIVE WORKFLOW STEPPER -->
+            <section class="view-section" id="view-workflow">
+                <div class="glass-panel" id="wf-approval-banner" style="display: none; border-color: var(--accent-amber); background: rgba(245, 158, 11, 0.08);">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <div style="font-weight: 700; color: var(--accent-amber); font-size: 15px;">🛡️ Workflow Paused: Human Manager Approval Required</div>
+                            <div style="font-size: 13px; color: #cbd5e1; margin-top: 4px;" id="wf-approval-reason">Awaiting sign-off</div>
+                        </div>
+                        <button class="btn-primary" onclick="switchView('approvals')">Review in Approval Centre →</button>
+                    </div>
+                </div>
+
+                <div class="glass-panel">
+                    <div class="panel-header">
+                        <div class="panel-title">
+                            <span>🤖 Multi-Agent Execution Pipeline</span>
+                            <span style="font-size: 12px; color: var(--text-muted); font-family: var(--font-mono);">WF: <span id="wf-display-id">-</span></span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <span id="wf-display-status"><span class="status-pill pending">IDLE</span></span>
+                            <span style="font-size: 12px; color: var(--text-secondary);" id="wf-display-step">Step: -</span>
+                        </div>
+                    </div>
+
+                    <div class="workflow-pipeline">
+                        <!-- Agent 1 -->
+                        <div class="agent-card" id="agent-req">
+                            <div class="agent-info">
+                                <div class="agent-avatar">🔍</div>
+                                <div>
+                                    <div class="agent-name">1. Requirement Analysis Agent</div>
+                                    <div class="agent-role">CrewAI • Extracts specs, quantity, budget & deadlines into validated schema</div>
+                                </div>
+                            </div>
+                            <div class="agent-output-preview">Pending input analysis...</div>
+                            <span class="status-pill pending">Pending</span>
+                        </div>
+
+                        <!-- Agent 2 -->
+                        <div class="agent-card" id="agent-vendor">
+                            <div class="agent-info">
+                                <div class="agent-avatar">🏢</div>
+                                <div>
+                                    <div class="agent-name">2. Vendor Research Agent</div>
+                                    <div class="agent-role">CrewAI + MCP Tools • Discovers active suppliers & catalog listings from MySQL</div>
+                                </div>
+                            </div>
+                            <div class="agent-output-preview">Waiting for requirements...</div>
+                            <span class="status-pill pending">Pending</span>
+                        </div>
+
+                        <!-- Agent 3 -->
+                        <div class="agent-card" id="agent-price">
+                            <div class="agent-info">
+                                <div class="agent-avatar">🧮</div>
+                                <div>
+                                    <div class="agent-name">3. Price Analysis Agent</div>
+                                    <div class="agent-role">CrewAI + Python Decimal • Computes tiered discounts, 18% GST & logistics</div>
+                                </div>
+                            </div>
+                            <div class="agent-output-preview">Awaiting vendor quotes...</div>
+                            <span class="status-pill pending">Pending</span>
+                        </div>
+
+                        <!-- Agent 4 -->
+                        <div class="agent-card" id="agent-comp">
+                            <div class="agent-info">
+                                <div class="agent-avatar">⚖️</div>
+                                <div>
+                                    <div class="agent-name">4. Compliance Agent</div>
+                                    <div class="agent-role">CrewAI • Audits vendor active status, warranty SLAs, delivery deadlines & MOQ</div>
+                                </div>
+                            </div>
+                            <div class="agent-output-preview">Awaiting policy verification...</div>
+                            <span class="status-pill pending">Pending</span>
+                        </div>
+
+                        <!-- Agent 5 -->
+                        <div class="agent-card" id="agent-eval">
+                            <div class="agent-info">
+                                <div class="agent-avatar">⭐</div>
+                                <div>
+                                    <div class="agent-name">5. Deal Evaluation Agent</div>
+                                    <div class="agent-role">CrewAI • Weighted scoring (Price, Delivery, Warranty, Compliance, Specs)</div>
+                                </div>
+                            </div>
+                            <div class="agent-output-preview">Awaiting score calculation...</div>
+                            <span class="status-pill pending">Pending</span>
+                        </div>
+
+                        <!-- Agent 6 -->
+                        <div class="agent-card" id="agent-budget">
+                            <div class="agent-info">
+                                <div class="agent-avatar">💰</div>
+                                <div>
+                                    <div class="agent-name">6. Budget Validation Agent</div>
+                                    <div class="agent-role">CrewAI • Strict deterministic comparison against approved budget ceiling</div>
+                                </div>
+                            </div>
+                            <div class="agent-output-preview">Awaiting quotation total...</div>
+                            <span class="status-pill pending">Pending</span>
+                        </div>
+
+                        <!-- Agent 7 -->
+                        <div class="agent-card" id="agent-neg">
+                            <div class="agent-info">
+                                <div class="agent-avatar">💬</div>
+                                <div>
+                                    <div class="agent-name">7. Negotiation Agent</div>
+                                    <div class="agent-role">CrewAI • Drafts data-backed counter-offers & persuasive vendor correspondence</div>
+                                </div>
+                            </div>
+                            <div class="agent-output-preview">Awaiting winning deal...</div>
+                            <span class="status-pill pending">Pending</span>
+                        </div>
+
+                        <!-- Agent 8 -->
+                        <div class="agent-card" id="agent-adk">
+                            <div class="agent-info">
+                                <div class="agent-avatar" style="background: rgba(56, 189, 248, 0.15); border-color: var(--accent-cyan);">🛡️</div>
+                                <div>
+                                    <div class="agent-name">8. Google ADK Risk Agent & Approval Gating</div>
+                                    <div class="agent-role">Google ADK via A2A Protocol • Independent risk score & human governance gate</div>
+                                </div>
+                            </div>
+                            <div class="agent-output-preview">Awaiting A2A dispatch...</div>
+                            <span class="status-pill pending">Pending</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="glass-panel">
+                    <div class="panel-header">
+                        <div class="panel-title">
+                            <span>📜 Live Agent Audit Log Stream</span>
+                        </div>
+                    </div>
+                    <div class="terminal-window" id="terminal-audit-stream">
+                        <div class="terminal-line"><span class="terminal-msg">Ready. Click 'New Request' to initiate multi-agent orchestration.</span></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 4. VIEW: VENDOR COMPARISON MATRIX -->
+            <section class="view-section" id="view-vendors">
+                <div class="glass-panel">
+                    <div class="panel-header">
+                        <div class="panel-title">
+                            <span>🏢 Live Vendor Quotations & Multi-Criteria Ranking</span>
+                        </div>
+                        <button class="btn-secondary" onclick="loadVendors()">↻ Refresh Catalog</button>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Rank</th>
+                                    <th>Vendor Name</th>
+                                    <th>Unit Price</th>
+                                    <th>Bulk Discount</th>
+                                    <th>GST (18%)</th>
+                                    <th>Final Total</th>
+                                    <th>Delivery SLA</th>
+                                    <th>Warranty</th>
+                                    <th>Compliance</th>
+                                    <th>Score</th>
+                                </tr>
+                            </thead>
+                            <tbody id="vendors-comparison-table-body">
+                                <tr>
+                                    <td colspan="10" style="text-align: center; color: var(--text-muted);">Select or submit a request to see evaluated vendor matrix.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 5. VIEW: NEGOTIATION CENTRE -->
+            <section class="view-section" id="view-negotiations">
+                <div id="negotiations-container">
+                    <div class="glass-panel" style="text-align: center; color: var(--text-muted); padding: 48px;">
+                        Loading negotiation strategies...
+                    </div>
+                </div>
+            </section>
+
+            <!-- 6. VIEW: APPROVAL CENTRE -->
+            <section class="view-section" id="view-approvals">
+                <div id="approvals-container">
+                    <div class="glass-panel" style="text-align: center; color: var(--text-muted); padding: 48px;">
+                        Loading pending approvals...
+                    </div>
+                </div>
+            </section>
+
+            <!-- 7. VIEW: PURCHASE ORDERS -->
+            <section class="view-section" id="view-orders">
+                <div class="glass-panel">
+                    <div class="panel-header">
+                        <div class="panel-title">
+                            <span>📄 Issued Enterprise Purchase Orders</span>
+                        </div>
+                        <button class="btn-secondary" onclick="loadPurchaseOrders()">↻ Refresh Orders</button>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Order Number</th>
+                                    <th>Supplier</th>
+                                    <th>Approved Total</th>
+                                    <th>Status</th>
+                                    <th>Authorized By</th>
+                                    <th>Date</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="pos-table-body">
+                                <tr>
+                                    <td colspan="7" style="text-align: center; color: var(--text-muted);">No Purchase Orders recorded.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 8. VIEW: AUDIT TRAIL -->
+            <section class="view-section" id="view-audit">
+                <div class="glass-panel">
+                    <div class="panel-header">
+                        <div class="panel-title">
+                            <span>📜 Full Corporate Audit Trail</span>
+                        </div>
+                    </div>
+                    <div class="terminal-window" id="full-audit-terminal" style="height: 500px;">
+                        <div class="terminal-line"><span class="terminal-msg">Querying immutable agent logs from MySQL...</span></div>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- Modal for Printable Purchase Order -->
+    <div class="modal-overlay" id="po-modal" onclick="if(event.target === this) closePOModal()">
+        <div class="modal-content" style="max-width: 800px;">
+            <div class="modal-header">
+                <div style="font-weight: 700; font-size: 16px;">Formal Purchase Order Document</div>
+                <button class="modal-close" onclick="closePOModal()">✕</button>
+            </div>
+            <div id="po-modal-container">
+                <!-- Injected via JavaScript -->
+            </div>
+            <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 20px;">
+                <button class="btn-secondary" onclick="window.print()">🖨️ Print Document</button>
+                <button class="btn-primary" onclick="closePOModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
