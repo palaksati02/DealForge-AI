@@ -1,5 +1,10 @@
+import os
 from decimal import Decimal
 from typing import List, Dict, Any, Optional
+
+if "OPENAI_API_KEY" not in os.environ:
+    os.environ["OPENAI_API_KEY"] = "mock-key-dealforge-demo"
+
 from crewai import Agent, Task, Crew, Process
 from app.core.config import settings
 from app.core.logging import logger

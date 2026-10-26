@@ -45,6 +45,10 @@ export const WorkflowLiveView: React.FC<Props> = ({
   };
 
   useEffect(() => {
+    if (!requestId) {
+      setLoading(false);
+      return;
+    }
     fetchStatus();
     const interval = setInterval(fetchStatus, 2000);
     return () => clearInterval(interval);
