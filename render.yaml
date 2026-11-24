@@ -1,0 +1,60 @@
+services:
+  # 1. Main FastAPI Application + CrewAI Orchestration + Glassmorphism UI
+  - type: web
+    name: dealforge-app
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    plan: standard
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: DEBUG
+        value: "false"
+      - key: DEMO_MODE
+        value: "true"
+      - key: DB_HOST
+        fromDatabase:
+          name: dealforge-mysql
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: dealforge-mysql
+          property: port
+      - key: DB_USER
+        fromDatabase:
+          name: dealforge-mysql
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: dealforge-mysql
+          property: password
+      - key: DB_NAME
+        fromDatabase:
+          name: dealforge-mysql
+          property: database
+      - key: AUTO_APPROVAL_THRESHOLD
+        value: "1000000.00"
+      - key: ADK_SERVICE_HOST
+        value: dealforge-adk-service
+      - key: ADK_SERVICE_PORT
+        value: "10000"
+
+  # 2. Independent Google ADK Risk Agent Microservice (A2A Protocol)
+  - type: web
+    name: dealforge-adk-service
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.adk_service.server:adk_app --host 0.0.0.0 --port $PORT
+    plan: starter
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: DEMO_MODE
+        value: "true"
+
+databases:
+  - name: dealforge-mysql
+    databaseName: dealforge_db
+    user: dealforge_user
+    plan: starter
