@@ -1,5 +1,5 @@
 import httpx
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from app.core.config import settings
 from app.core.logging import logger
 from app.a2a.schemas import A2AMessageEnvelope, RiskAssessmentPayload, RiskAssessmentResponsePayload
@@ -13,9 +13,15 @@ class A2AClient:
     Enforces correlation IDs, strict timeouts, and fail-safe review states.
     """
 
-    def __init__(self, endpoint_url: Optional[str] = None, timeout_seconds: Optional[int] = None):
+    def __init__(
+        self,
+        endpoint_url: Optional[str] = None,
+        timeout_seconds: Optional[int] = None,
+        candidate_urls: Optional[List[str]] = None
+    ):
         self.endpoint_url = endpoint_url or f"{settings.adk_service_url}/a2a/v1/message"
         self.timeout_seconds = timeout_seconds or settings.ADK_TIMEOUT_SECONDS
+        self._custom_candidate_urls = candidate_urls
 
     def request_risk_assessment(
         self,
@@ -30,12 +36,15 @@ class A2AClient:
         )
 
         # Candidate URLs to attempt over HTTP:
-        # 1. Configured standalone ADK URL (typically port 8001 or cloud internal service)
-        # 2. Mounted FastAPI ADK endpoint on main port (typically port 8000 under /adk-service)
-        candidate_urls = [self.endpoint_url]
-        mounted_url = f"http://127.0.0.1:{settings.PORT}/adk-service/a2a/v1/message"
-        if mounted_url not in candidate_urls:
-            candidate_urls.append(mounted_url)
+        if self._custom_candidate_urls is not None:
+            candidate_urls = list(self._custom_candidate_urls)
+        else:
+            candidate_urls = [self.endpoint_url]
+            root_url = f"http://127.0.0.1:{settings.PORT}/a2a/v1/message"
+            mounted_url = f"http://127.0.0.1:{settings.PORT}/adk-service/a2a/v1/message"
+            for u in [root_url, mounted_url]:
+                if u not in candidate_urls:
+                    candidate_urls.append(u)
 
         last_error = None
         for target_url in candidate_urls:
@@ -59,21 +68,15 @@ class A2AClient:
 
         logger.warning(
             f"All A2A HTTP endpoints unavailable ({last_error}). "
-            f"Falling back to local in-process Google ADK Agent instance for high availability."
+            f"Strict Requirement 6 Policy: Deal marked as PENDING_RISK_VERIFICATION requiring mandatory human review."
         )
-        # In-process direct execution fallback to preserve end-to-end functionality
-        try:
-            assessment = adk_risk_agent.evaluate_risk(payload)
-            return assessment
-        except Exception as inner_e:
-            logger.error(f"Complete ADK failure: {inner_e}. Transitioning to mandatory human review.")
-            # Non-bypassable safety state
-            return RiskAssessmentResponsePayload(
-                risk_category="HIGH",
-                risk_score=95.0,
-                risk_factors=["ADK_A2A_COMMUNICATION_FAILURE"],
-                explanation=f"A2A communication error with Google ADK service: {last_error}. Strict policy requires manual review.",
-                recommended_action="REVIEW",
-                human_review_required=True,
-                assessed_by="DealForge Fail-Safe System"
-            )
+        # Non-bypassable fail-safe safety state per Requirement 6
+        return RiskAssessmentResponsePayload(
+            risk_category="HIGH",
+            risk_score=95.0,
+            risk_factors=["ADK_A2A_COMMUNICATION_FAILURE", "A2A_SERVICE_UNAVAILABLE"],
+            explanation=f"A2A communication error with Google ADK service: {last_error}. Mandatory human review required.",
+            recommended_action="REVIEW",
+            human_review_required=True,
+            assessed_by="DealForge A2A Fail-Safe Guardrail"
+        )

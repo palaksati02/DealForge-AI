@@ -104,21 +104,24 @@ function setupQuickPrompts() {
 async function loadDashboardSummary() {
     try {
         const res = await fetch(`${API_BASE}/dashboard/summary`);
-        if (!res.ok) return;
+        if (!res.ok) {
+            renderRecentRequests([]);
+            return;
+        }
         const data = await res.json();
         state.dashboardData = data;
 
         const elTotalReq = document.getElementById('stat-total-requests');
-        if (elTotalReq) elTotalReq.innerText = data.total_requests;
+        if (elTotalReq) elTotalReq.innerText = data.total_requests || 0;
 
         const elActiveWf = document.getElementById('stat-active-workflows');
-        if (elActiveWf) elActiveWf.innerText = data.active_workflows;
+        if (elActiveWf) elActiveWf.innerText = data.active_workflows || 0;
 
         const elPendingApp = document.getElementById('stat-pending-approvals');
-        if (elPendingApp) elPendingApp.innerText = data.pending_approvals;
+        if (elPendingApp) elPendingApp.innerText = data.pending_approvals || 0;
 
         const elIssuedPo = document.getElementById('stat-issued-pos');
-        if (elIssuedPo) elIssuedPo.innerText = data.issued_purchase_orders;
+        if (elIssuedPo) elIssuedPo.innerText = data.issued_purchase_orders || 0;
 
         const elApprovedSpend = document.getElementById('stat-approved-spend');
         if (elApprovedSpend) elApprovedSpend.innerText = `₹${Number(data.total_spend_approved || 0).toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
@@ -132,13 +135,14 @@ async function loadDashboardSummary() {
         // Update badges
         const badge = document.getElementById('nav-pending-badge');
         if (badge) {
-            badge.innerText = data.pending_approvals;
-            badge.style.display = data.pending_approvals > 0 ? 'inline-block' : 'none';
+            badge.innerText = data.pending_approvals || 0;
+            badge.style.display = (data.pending_approvals && data.pending_approvals > 0) ? 'inline-block' : 'none';
         }
 
         renderRecentRequests(data.recent_requests || []);
     } catch (err) {
         console.error('Error fetching dashboard summary:', err);
+        renderRecentRequests([]);
     }
 }
 
@@ -282,7 +286,8 @@ function updateWorkflowUI(data) {
         { id: 'agent-eval', name: 'Deal Evaluation Agent' },
         { id: 'agent-budget', name: 'Budget Validation Agent' },
         { id: 'agent-neg', name: 'Negotiation Agent' },
-        { id: 'agent-adk', name: 'Approval and Workflow Coordination Agent' }
+        { id: 'agent-adk', name: 'Google ADK Risk Agent' },
+        { id: 'agent-coord', name: 'Approval and Workflow Coordination Agent' }
     ];
 
     // Check if entire workflow is in a terminal or completed state
@@ -312,7 +317,7 @@ function updateWorkflowUI(data) {
                 if (outEl) {
                     outEl.innerText = completeLog?.output_summary || agentLogs[agentLogs.length - 1].output_summary || agentLogs[0].output_summary || 'Task completed successfully.';
                 }
-            } else if (pauseLog || (data.status === 'PAUSED' && a.id === 'agent-adk')) {
+            } else if (pauseLog || (data.status === 'PAUSED' && (a.id === 'agent-adk' || a.id === 'agent-coord'))) {
                 agentCard.classList.add('paused');
                 if (pillEl) { pillEl.className = 'status-pill warning'; pillEl.innerText = 'Paused'; }
                 if (outEl) outEl.innerText = pauseLog?.output_summary || pauseLog?.input_summary || 'Awaiting human sign-off.';
@@ -416,9 +421,12 @@ async function loadVendors(requestId = null) {
         if (catRes.ok) {
             const catalog = await catRes.json();
             renderCatalogTable(catalog);
+        } else {
+            tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: var(--text-muted);">No vendor products available. Please refresh.</td></tr>`;
         }
     } catch (err) {
         console.error('Error loading vendors:', err);
+        tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: var(--accent-rose);">Unable to load vendor catalog. <button class="btn-secondary" style="padding: 2px 8px; font-size: 11px;" onclick="loadVendors()">Retry</button></td></tr>`;
     }
 }
 
@@ -497,7 +505,10 @@ async function loadNegotiations(requestId = null) {
 
     try {
         const res = await fetch(`${API_BASE}/requests/${reqId}/negotiations`);
-        if (!res.ok) return;
+        if (!res.ok) {
+            container.innerHTML = `<div class="glass-panel" style="text-align: center; color: var(--text-muted);">No negotiations recorded yet for this request.</div>`;
+            return;
+        }
         const negs = await res.json();
         state.negotiations = negs;
 
@@ -591,7 +602,16 @@ async function loadPendingApprovals() {
 
     try {
         const res = await fetch(`${API_BASE}/approvals/pending`);
-        if (!res.ok) return;
+        if (!res.ok) {
+            container.innerHTML = `
+                <div class="glass-panel" style="text-align: center; color: var(--text-muted); padding: 48px;">
+                    <div style="font-size: 36px; margin-bottom: 12px;">✅</div>
+                    <div style="font-size: 16px; font-weight: 700; color: #fff;">No Pending Approvals</div>
+                    <div style="font-size: 13px; margin-top: 6px;">All workflows are either approved, straight-through processed, or completed.</div>
+                </div>
+            `;
+            return;
+        }
         const approvals = await res.json();
         state.approvals = approvals;
 
@@ -699,7 +719,10 @@ async function loadPurchaseOrders() {
 
     try {
         const res = await fetch(`${API_BASE}/purchase-orders`);
-        if (!res.ok) return;
+        if (!res.ok) {
+            tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted);">No Purchase Orders issued yet. Run workflow to generate orders.</td></tr>`;
+            return;
+        }
         const pos = await res.json();
         state.orders = pos;
 
@@ -871,10 +894,16 @@ async function loadDashboardCrossMatrix() {
     if (!tbody) return;
     try {
         const res = await fetch(`${API_BASE}/observability/cross-matrix`);
-        if (!res.ok) return;
+        if (!res.ok) {
+            tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: var(--text-muted);">Agent cross matrix initializing... <button class="btn-secondary" style="padding: 2px 8px; font-size: 11px;" onclick="loadDashboardCrossMatrix()">Retry</button></td></tr>`;
+            return;
+        }
         const data = await res.json();
         const agents = data.agent_cross_matrix || [];
-        if (agents.length === 0) return;
+        if (agents.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: var(--text-muted);">No agent execution data recorded yet. Run a workflow to populate.</td></tr>`;
+            return;
+        }
 
         tbody.innerHTML = agents.map(a => `
             <tr>
@@ -891,13 +920,18 @@ async function loadDashboardCrossMatrix() {
         `).join('');
     } catch (e) {
         console.error('Error loading dashboard cross matrix:', e);
+        tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: var(--text-muted);">Agent cross matrix initializing... <button class="btn-secondary" style="padding: 2px 8px; font-size: 11px;" onclick="loadDashboardCrossMatrix()">Retry</button></td></tr>`;
     }
 }
 
 async function loadObservabilityMatrix() {
     try {
         const res = await fetch(`${API_BASE}/observability/cross-matrix`);
-        if (!res.ok) return;
+        if (!res.ok) {
+            const agentBody = document.getElementById('obs-agent-matrix-body');
+            if (agentBody) agentBody.innerHTML = `<tr><td colspan="11" style="text-align: center; color: var(--text-muted);">Matrix loading...</td></tr>`;
+            return;
+        }
         const data = await res.json();
         const summary = data.summary || {};
 

@@ -8,6 +8,14 @@ from app.db.models.entities import (
     Product,
     VendorProduct,
     ComplianceRule,
+    PurchaseRequest,
+    VendorQuote,
+    Evaluation,
+    Negotiation,
+    Approval,
+    PurchaseOrder,
+    WorkflowState,
+    AgentLog,
 )
 from app.core.logging import logger
 
@@ -21,7 +29,11 @@ def seed_database(db: Session = None):
     try:
         # Check if already seeded
         if db.query(Vendor).count() > 0:
-            logger.info("Database already seeded with vendors. Skipping seed.")
+            if db.query(PurchaseRequest).count() == 0:
+                logger.info("Vendors already seeded, but no requests exist. Seeding initial procurement workflows...")
+                _seed_initial_workflows(db)
+            else:
+                logger.info("Database already seeded with vendors and workflows. Skipping seed.")
             return
 
         logger.info("Seeding database with realistic fictional procurement data...")
@@ -450,7 +462,8 @@ def seed_database(db: Session = None):
         ]
         db.add_all(vendor_products)
         db.commit()
-        logger.info("Successfully seeded database with vendors, products, compliance rules, and catalog.")
+        _seed_initial_workflows(db)
+        logger.info("Successfully seeded database with vendors, products, compliance rules, catalog, and benchmark workflows.")
 
     except Exception as e:
         db.rollback()
@@ -459,6 +472,317 @@ def seed_database(db: Session = None):
     finally:
         if close_db:
             db.close()
+
+
+def _seed_initial_workflows(db: Session):
+    """Seed realistic procurement workflows, evaluated quotes, negotiations, approvals, and POs."""
+    try:
+        # 1. Standard Bulk Laptop Procurement (Issued PO)
+        req1 = PurchaseRequest(
+            request_id="req-seed-01",
+            requester="IT Operations Director",
+            raw_request_text="Purchase 50 laptops with at least 16 GB RAM and 512 GB SSD, a maximum budget of ₹38,00,000, delivery within 14 days, and a minimum two-year warranty.",
+            product_requirements={"category": "Laptops", "specifications": {"ram_gb": 16, "storage_gb": 512, "ssd": True}},
+            quantity=50,
+            budget_limit=Decimal("3800000.00"),
+            currency="INR",
+            delivery_deadline_days=14,
+            warranty_requirement_months=24,
+            status="PO_CREATED"
+        )
+        q1 = VendorQuote(
+            quote_id="quote-seed-01",
+            request_id="req-seed-01",
+            vendor_id="vend-nexus-01",
+            unit_price=Decimal("65000.00"),
+            quantity=50,
+            discount=Decimal("243750.00"),
+            tax=Decimal("541125.00"),
+            shipping_cost=Decimal("10000.00"),
+            total_amount=Decimal("3557375.00"),
+            delivery_days=8,
+            warranty_months=36,
+            availability_status="IN_STOCK",
+            quote_status="SELECTED",
+            calculation_breakdown={"base_subtotal": "3250000.00", "discount_percentage": "7.5", "discount_amount": "243750.00", "taxable_amount": "3006250.00", "tax_rate_percentage": "18.0000", "tax_amount": "541125.00", "shipping_cost": "10000.00", "final_total": "3557375.00"}
+        )
+        ev1 = Evaluation(
+            evaluation_id="eval-seed-01",
+            request_id="req-seed-01",
+            quote_id="quote-seed-01",
+            price_score=Decimal("95.50"),
+            delivery_score=Decimal("94.00"),
+            warranty_score=Decimal("98.00"),
+            compliance_score=Decimal("97.00"),
+            specification_score=Decimal("96.00"),
+            final_score=Decimal("95.85"),
+            eligibility_status="ELIGIBLE",
+            explanation="Optimal pricing with 7.5% volume discount, full ISO 27001 compliance, and 3-year enterprise warranty.",
+            rank=1
+        )
+        neg1 = Negotiation(
+            negotiation_id="neg-seed-01",
+            request_id="req-seed-01",
+            quote_id="quote-seed-01",
+            original_amount=Decimal("3801125.00"),
+            target_amount=Decimal("3500000.00"),
+            counter_offer_amount=Decimal("3557375.00"),
+            justification="Volume discount requested on bulk purchase of 50 units.",
+            draft_message="We propose ₹35,57,375.00 all-inclusive based on 50-unit volume tier.",
+            negotiation_status="ACCEPTED",
+            vendor_response="Nexus Tech confirms acceptance of revised volume counter-offer ₹35,57,375.00 with priority 8-day dispatch."
+        )
+        app1 = Approval(
+            approval_id="appr-seed-01",
+            request_id="req-seed-01",
+            quote_id="quote-seed-01",
+            risk_assessment={"risk_category": "LOW", "risk_score": 12.0, "human_review_required": False, "assessed_by": "Google ADK Risk Agent via A2A"},
+            approval_reason="Total value ₹35,57,375.00 exceeds ₹10,00,000 threshold.",
+            requested_by="CrewAI:ApprovalCoordinator",
+            decision="APPROVED",
+            decided_by="VP of Enterprise Procurement",
+            comments="Approved based on low ADK risk score (12.0/100) and verified ISO compliance."
+        )
+        po1 = PurchaseOrder(
+            purchase_order_id="po-seed-01",
+            request_id="req-seed-01",
+            vendor_id="vend-nexus-01",
+            quote_id="quote-seed-01",
+            order_number="PO-DF-2026-0001",
+            approved_total=Decimal("3557375.00"),
+            currency="INR",
+            status="ISSUED",
+            approved_by="VP of Enterprise Procurement",
+            order_details={"quantity": 50, "unit_price": 65000.0, "discount": 243750.0, "tax": 541125.0, "shipping_cost": 10000.0, "total_amount": 3557375.0, "currency": "INR", "delivery_days": 8, "warranty_months": 36, "calculation_breakdown": {"base_subtotal": "3250000.00", "discount_percentage": "7.5", "discount_amount": "243750.00", "taxable_amount": "3006250.00", "tax_rate_percentage": "18.0000", "tax_amount": "541125.00", "shipping_cost": "10000.00", "final_total": "3557375.00"}}
+        )
+        wf1 = WorkflowState(
+            workflow_id="wf-seed-01",
+            request_id="req-seed-01",
+            current_step="PO_CREATED",
+            status="COMPLETED",
+            state_data={"order_number": "PO-DF-2026-0001", "approved_total": "3557375.00"}
+        )
+
+        # 2. Enterprise Server Cluster (Issued PO)
+        req2 = PurchaseRequest(
+            request_id="req-seed-02",
+            requester="Cloud Infrastructure Lead",
+            raw_request_text="Purchase 10 enterprise servers with dual Xeon processors, a maximum budget of ₹50,00,000.",
+            product_requirements={"category": "Servers"},
+            quantity=10,
+            budget_limit=Decimal("5000000.00"),
+            currency="INR",
+            delivery_deadline_days=20,
+            warranty_requirement_months=36,
+            status="PO_CREATED"
+        )
+        q2 = VendorQuote(
+            quote_id="quote-seed-02",
+            request_id="req-seed-02",
+            vendor_id="vend-orion-04",
+            unit_price=Decimal("495000.00"),
+            quantity=10,
+            discount=Decimal("495000.00"),
+            tax=Decimal("801900.00"),
+            shipping_cost=Decimal("15000.00"),
+            total_amount=Decimal("5271900.00"),
+            delivery_days=10,
+            warranty_months=36,
+            availability_status="IN_STOCK",
+            quote_status="SELECTED",
+            calculation_breakdown={"base_subtotal": "4950000.00", "discount_percentage": "10.0", "discount_amount": "495000.00", "taxable_amount": "4455000.00", "tax_rate_percentage": "18.0000", "tax_amount": "801900.00", "shipping_cost": "15000.00", "final_total": "5271900.00"}
+        )
+        ev2 = Evaluation(
+            evaluation_id="eval-seed-02",
+            request_id="req-seed-02",
+            quote_id="quote-seed-02",
+            price_score=Decimal("92.00"),
+            delivery_score=Decimal("96.00"),
+            warranty_score=Decimal("95.00"),
+            compliance_score=Decimal("97.00"),
+            specification_score=Decimal("98.00"),
+            final_score=Decimal("95.10"),
+            eligibility_status="ELIGIBLE",
+            explanation="Dell PowerEdge R760 cluster with 10% enterprise discount.",
+            rank=1
+        )
+        app2 = Approval(
+            approval_id="appr-seed-02",
+            request_id="req-seed-02",
+            quote_id="quote-seed-02",
+            risk_assessment={"risk_category": "LOW", "risk_score": 15.0, "human_review_required": False, "assessed_by": "Google ADK Risk Agent via A2A"},
+            approval_reason="High-Value Procurement (₹52,71,900.00 >= ₹10,00,000 threshold).",
+            requested_by="CrewAI:ApprovalCoordinator",
+            decision="APPROVED",
+            decided_by="CTO & VP Infrastructure",
+            comments="Approved for data center expansion."
+        )
+        po2 = PurchaseOrder(
+            purchase_order_id="po-seed-02",
+            request_id="req-seed-02",
+            vendor_id="vend-orion-04",
+            quote_id="quote-seed-02",
+            order_number="PO-DF-2026-0002",
+            approved_total=Decimal("5271900.00"),
+            currency="INR",
+            status="ISSUED",
+            approved_by="CTO & VP Infrastructure",
+            order_details={"quantity": 10, "unit_price": 495000.0, "discount": 495000.0, "tax": 801900.0, "shipping_cost": 15000.0, "total_amount": 5271900.0, "currency": "INR", "delivery_days": 10, "warranty_months": 36}
+        )
+        wf2 = WorkflowState(
+            workflow_id="wf-seed-02",
+            request_id="req-seed-02",
+            current_step="PO_CREATED",
+            status="COMPLETED",
+            state_data={"order_number": "PO-DF-2026-0002", "approved_total": "5271900.00"}
+        )
+
+        # 3. Department 4K Displays (Auto-Approved < ₹10L Threshold)
+        req3 = PurchaseRequest(
+            request_id="req-seed-03",
+            requester="Operations Manager",
+            raw_request_text="Purchase 15 UltraSharp 4K Displays with a budget of ₹7,50,000.",
+            product_requirements={"category": "Displays"},
+            quantity=15,
+            budget_limit=Decimal("750000.00"),
+            currency="INR",
+            delivery_deadline_days=10,
+            warranty_requirement_months=36,
+            status="PO_CREATED"
+        )
+        q3 = VendorQuote(
+            quote_id="quote-seed-03",
+            request_id="req-seed-03",
+            vendor_id="vend-nexus-01",
+            unit_price=Decimal("38000.00"),
+            quantity=15,
+            discount=Decimal("0.00"),
+            tax=Decimal("102600.00"),
+            shipping_cost=Decimal("5000.00"),
+            total_amount=Decimal("677600.00"),
+            delivery_days=5,
+            warranty_months=36,
+            availability_status="IN_STOCK",
+            quote_status="SELECTED",
+            calculation_breakdown={"base_subtotal": "570000.00", "discount_percentage": "0.0", "discount_amount": "0.00", "taxable_amount": "570000.00", "tax_rate_percentage": "18.0000", "tax_amount": "102600.00", "shipping_cost": "5000.00", "final_total": "677600.00"}
+        )
+        ev3 = Evaluation(
+            evaluation_id="eval-seed-03",
+            request_id="req-seed-03",
+            quote_id="quote-seed-03",
+            price_score=Decimal("94.00"),
+            delivery_score=Decimal("97.00"),
+            warranty_score=Decimal("98.00"),
+            compliance_score=Decimal("98.00"),
+            specification_score=Decimal("95.00"),
+            final_score=Decimal("96.20"),
+            eligibility_status="ELIGIBLE",
+            explanation="5-day rapid dispatch with standard 3-year manufacturer warranty.",
+            rank=1
+        )
+        app3 = Approval(
+            approval_id="appr-seed-03",
+            request_id="req-seed-03",
+            quote_id="quote-seed-03",
+            risk_assessment={"risk_category": "LOW", "risk_score": 8.0, "human_review_required": False, "assessed_by": "Google ADK Risk Agent via A2A"},
+            approval_reason="Total value ₹6,77,600.00 is below ₹10,00,000 threshold. Auto-Approved.",
+            requested_by="CrewAI:ApprovalCoordinator",
+            decision="APPROVED",
+            decided_by="System Auto-Approval Engine",
+            comments="Straight-through STP auto-approval granted (< ₹10,00,000 ceiling)."
+        )
+        po3 = PurchaseOrder(
+            purchase_order_id="po-seed-03",
+            request_id="req-seed-03",
+            vendor_id="vend-nexus-01",
+            quote_id="quote-seed-03",
+            order_number="PO-DF-2026-0003",
+            approved_total=Decimal("677600.00"),
+            currency="INR",
+            status="ISSUED",
+            approved_by="System Auto-Approval Engine",
+            order_details={"quantity": 15, "unit_price": 38000.0, "discount": 0.0, "tax": 102600.0, "shipping_cost": 5000.0, "total_amount": 677600.0, "currency": "INR", "delivery_days": 5, "warranty_months": 36}
+        )
+        wf3 = WorkflowState(
+            workflow_id="wf-seed-03",
+            request_id="req-seed-03",
+            current_step="PO_CREATED",
+            status="COMPLETED",
+            state_data={"order_number": "PO-DF-2026-0003", "approved_total": "677600.00"}
+        )
+
+        # 4. Pending Approval Item (Awaiting Human Sign-off in Approval Centre)
+        req4 = PurchaseRequest(
+            request_id="req-seed-04",
+            requester="Engineering Team Lead",
+            raw_request_text="Purchase 30 developer laptops with 32 GB RAM, maximum budget of ₹25,00,000.",
+            product_requirements={"category": "Laptops", "specifications": {"ram_gb": 32, "storage_gb": 512, "ssd": True}},
+            quantity=30,
+            budget_limit=Decimal("2500000.00"),
+            currency="INR",
+            delivery_deadline_days=14,
+            warranty_requirement_months=24,
+            status="PENDING_APPROVAL"
+        )
+        q4 = VendorQuote(
+            quote_id="quote-seed-04",
+            request_id="req-seed-04",
+            vendor_id="vend-nexus-01",
+            unit_price=Decimal("65000.00"),
+            quantity=30,
+            discount=Decimal("0.00"),
+            tax=Decimal("351000.00"),
+            shipping_cost=Decimal("8000.00"),
+            total_amount=Decimal("2309000.00"),
+            delivery_days=8,
+            warranty_months=36,
+            availability_status="IN_STOCK",
+            quote_status="EVALUATED",
+            calculation_breakdown={"base_subtotal": "1950000.00", "discount_percentage": "0.0", "discount_amount": "0.00", "taxable_amount": "1950000.00", "tax_rate_percentage": "18.0000", "tax_amount": "351000.00", "shipping_cost": "8000.00", "final_total": "2309000.00"}
+        )
+        ev4 = Evaluation(
+            evaluation_id="eval-seed-04",
+            request_id="req-seed-04",
+            quote_id="quote-seed-04",
+            price_score=Decimal("94.50"),
+            delivery_score=Decimal("95.00"),
+            warranty_score=Decimal("98.00"),
+            compliance_score=Decimal("97.00"),
+            specification_score=Decimal("95.00"),
+            final_score=Decimal("95.50"),
+            eligibility_status="ELIGIBLE",
+            explanation="High-performance developer configuration, within budget surplus ₹1,91,000.00.",
+            rank=1
+        )
+        app4 = Approval(
+            approval_id="appr-seed-04",
+            request_id="req-seed-04",
+            quote_id="quote-seed-04",
+            risk_assessment={"risk_category": "LOW", "risk_score": 11.5, "human_review_required": False, "explanation": "Google ADK evaluated deal risk as 11.5/100 (LOW). Vendor demonstrates strong financial alignment, compliant terms, and acceptable SLA.", "assessed_by": "Google ADK Risk Agent via A2A"},
+            approval_reason="Total value ₹23,09,000.00 exceeds ₹10,00,000 threshold. Mandatory Human Sign-Off Required.",
+            requested_by="CrewAI:ApprovalCoordinator",
+            decision="PENDING",
+            comments=None
+        )
+        wf4 = WorkflowState(
+            workflow_id="wf-seed-04",
+            request_id="req-seed-04",
+            current_step="WAITING_FOR_APPROVAL",
+            status="PAUSED",
+            state_data={"approval_id": "appr-seed-04", "approval_reason": "Total value ₹23,09,000.00 exceeds ₹10,00,000 threshold."}
+        )
+
+        db.add_all([
+            req1, q1, ev1, neg1, app1, po1, wf1,
+            req2, q2, ev2, app2, po2, wf2,
+            req3, q3, ev3, app3, po3, wf3,
+            req4, q4, ev4, app4, wf4,
+        ])
+        db.commit()
+        logger.info("Successfully seeded benchmark procurement requests, quotes, evaluations, negotiations, approvals, and POs.")
+    except Exception as e:
+        db.rollback()
+        logger.warning(f"Could not seed initial workflows: {e}")
 
 
 if __name__ == "__main__":

@@ -22,7 +22,8 @@ from app.core.logging import logger
 from app.db.base import Base
 from app.db.session import engine, check_db_connection
 from app.db.seed import seed_database
-from app.adk_service.server import adk_app
+from app.adk_service.server import adk_app, handle_a2a_message
+from app.a2a.schemas import A2AMessageEnvelope
 
 # Import API Routers
 from app.api.routes.requests import router as requests_router
@@ -118,6 +119,11 @@ app.include_router(observability_router, prefix="/api")
 # Mount Independent Google ADK Risk Agent service for dual-mode deployment
 # (Available both on main port under /adk-service or via standalone port 8001)
 app.mount("/adk-service", adk_app)
+
+# Expose primary A2A Protocol root endpoint (Requirement 6: POST /a2a/v1/message)
+@app.post("/a2a/v1/message", response_model=A2AMessageEnvelope, tags=["A2A Protocol"])
+def a2a_root_message_handler(envelope: A2AMessageEnvelope):
+    return handle_a2a_message(envelope)
 
 # Mount Frontend Static Directory
 frontend_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend")
